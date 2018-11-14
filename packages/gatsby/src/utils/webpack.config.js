@@ -168,9 +168,6 @@ module.exports = async (
 
   function getPlugins() {
     let configPlugins = [
-      // Adds support for installing with Plug'n'Play, leading to faster installs and adding
-      // guards against forgotten dependencies and such.
-      PnpWebpackPlugin,
       plugins.moment(),
 
       // Add a few global variables. Set NODE_ENV to production (enables
@@ -354,6 +351,11 @@ module.exports = async (
   function getResolve() {
     const { program } = store.getState()
     return {
+      plugins: [
+        // Adds support for installing with Plug'n'Play, leading to faster installs and adding
+        // guards against forgotten dependencies and such.
+        PnpWebpackPlugin,
+      ],
       // Use the program's extension list (generated via the
       // 'resolvableExtensions' API hook).
       extensions: [...program.extensions],
