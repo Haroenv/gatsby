@@ -4,6 +4,7 @@ const fs = require(`fs-extra`)
 const path = require(`path`)
 const dotenv = require(`dotenv`)
 const FriendlyErrorsWebpackPlugin = require(`friendly-errors-webpack-plugin`)
+const PnpWebpackPlugin = require(`pnp-webpack-plugin`)
 const { store } = require(`../redux`)
 const { actions } = require(`../redux/actions`)
 const debug = require(`debug`)(`gatsby:webpack-config`)
@@ -167,6 +168,9 @@ module.exports = async (
 
   function getPlugins() {
     let configPlugins = [
+      // Adds support for installing with Plug'n'Play, leading to faster installs and adding
+      // guards against forgotten dependencies and such.
+      PnpWebpackPlugin,
       plugins.moment(),
 
       // Add a few global variables. Set NODE_ENV to production (enables
@@ -392,6 +396,11 @@ module.exports = async (
     }
 
     return {
+      plugins: [
+        // Also related to Plug'n'Play, but this time it tells Webpack to load its loaders
+        // from the current package.
+        PnpWebpackPlugin.moduleLoader(module),
+      ],
       modules: [...root, path.join(__dirname, `../loaders`), `node_modules`],
     }
   }
