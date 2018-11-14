@@ -298,10 +298,16 @@ module.exports = (argv, handlers) => {
     .command({
       command: `new [rootPath] [starter]`,
       desc: `Create new Gatsby project.`,
+      builder: _ =>
+        _.option(`use-pnp`, {
+          default: false,
+          type: `boolean`,
+          describe: `Turn on to use Yarn Plug'n'Play`,
+        }),
       handler: handlerP(
-        ({ rootPath, starter = `gatsbyjs/gatsby-starter-default` }) => {
+        ({ rootPath, starter = `gatsbyjs/gatsby-starter-default`, usePnp }) => {
           const initStarter = require(`./init-starter`)
-          return initStarter(starter, { rootPath })
+          return initStarter(starter, { rootPath, usePnp })
         }
       ),
     })

@@ -7,6 +7,7 @@ const sysPath = require(`path`)
 const report = require(`./reporter`)
 const url = require(`url`)
 const existsSync = require(`fs-exists-cached`).sync
+const semver = require(`semver`)
 
 const spawn = (cmd: string) => {
   const [file, ...args] = cmd.split(/\s+/)
@@ -27,15 +28,56 @@ const shouldUseYarn = () => {
   }
 }
 
+const checkYarnVersion = () => {
+  let hasMinYarnPnp = false
+  let yarnVersion = null
+  try {
+    yarnVersion = execSync(`yarnpkg --version`)
+      .toString()
+      .trim()
+    hasMinYarnPnp = semver.gte(yarnVersion, `1.12.0`)
+  } catch (err) {
+    // ignore
+  }
+  return {
+    hasMinYarnPnp: hasMinYarnPnp,
+    yarnVersion: yarnVersion,
+  }
+}
+
 // Executes `npm install` or `yarn install` in rootPath.
-const install = async rootPath => {
+const install = async ({ rootPath, usePnp }: Options) => {
   const prevDir = process.cwd()
 
   report.info(`Installing packages...`)
   process.chdir(rootPath)
 
   try {
-    let cmd = shouldUseYarn() ? spawn(`yarnpkg`) : spawn(`npm install`)
+    let cmd
+    if (shouldUseYarn()) {
+      const yarnInfo = checkYarnVersion()
+      const args = []
+      if (usePnp) {
+        if (!yarnInfo.hasMinYarnPnp) {
+          if (yarnInfo.yarnVersion) {
+            report.warn(
+              `You are using Yarn ${
+                yarnInfo.yarnVersion
+              } together with the --use-pnp flag, but Plug'n'Play is only supported starting from the 1.12 release.\n\n` +
+                `Please update to Yarn 1.12 or higher for a better, fully supported experience.\n`
+            )
+          }
+          // 1.11 had an issue with webpack-dev-middleware, so better not use PnP with it (never reached stable, but still)
+        } else {
+          args.push(`--enable-pnp`)
+        }
+      }
+
+      cmd = execa(`yarnpkg`, args, { stdio: `inherit` })
+    } else {
+      cmd = spawn(`npm install`)
+    }
+
     await cmd
   } finally {
     process.chdir(prevDir)
@@ -44,8 +86,13 @@ const install = async rootPath => {
 
 const ignored = path => !/^\.(git|hg)$/.test(sysPath.basename(path))
 
+type Options = {
+  rootPath: string,
+  usePnp: boolean,
+}
+
 // Copy starter from file system.
-const copy = async (starterPath: string, rootPath: string) => {
+const copy = async (starterPath: string, { rootPath, usePnp }: Options) => {
   // Chmod with 755.
   // 493 = parseInt('755', 8)
   await fs.mkdirp(rootPath, { mode: 493 })
@@ -71,13 +118,13 @@ const copy = async (starterPath: string, rootPath: string) => {
 
   report.success(`Created starter directory layout`)
 
-  await install(rootPath)
+  await install({ rootPath, usePnp })
 
   return true
 }
 
 // Clones starter from URI.
-const clone = async (hostInfo: any, rootPath: string) => {
+const clone = async (hostInfo: any, { rootPath, usePnp }: Options) => {
   let url
   // Let people use private repos accessed over SSH.
   if (hostInfo.getDefaultRepresentation() === `sshurl`) {
@@ -97,11 +144,12 @@ const clone = async (hostInfo: any, rootPath: string) => {
 
   await fs.remove(sysPath.join(rootPath, `.git`))
 
-  await install(rootPath)
+  await install({ rootPath, usePnp })
 }
 
 type InitOptions = {
   rootPath?: string,
+  usePnp?: boolean,
 }
 
 /**
@@ -109,6 +157,7 @@ type InitOptions = {
  */
 module.exports = async (starter: string, options: InitOptions = {}) => {
   const rootPath = options.rootPath || process.cwd()
+  const usePnp = options.usePnp || false
 
   const urlObject = url.parse(rootPath)
   if (urlObject.protocol && urlObject.host) {
@@ -124,6 +173,6 @@ module.exports = async (starter: string, options: InitOptions = {}) => {
   }
 
   const hostedInfo = hostedGitInfo.fromUrl(starter)
-  if (hostedInfo) await clone(hostedInfo, rootPath)
-  else await copy(starter, rootPath)
+  if (hostedInfo) await clone(hostedInfo, { rootPath, usePnp })
+  else await copy(starter, { rootPath, usePnp })
 }
